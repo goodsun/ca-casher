@@ -34,15 +34,38 @@ const validateContract = (req: Request, res: Response, next: Function) => {
 
 // Parse function parameters from query string
 const parseParams = (functionName: string, query: any): any[] => {
-  switch (functionName) {
-    case 'tokenURI':
-    case 'ownerOf':
-      return query.tokenId ? [query.tokenId] : [];
-    case 'balanceOf':
-      return query.address ? [query.address] : [];
-    default:
-      return [];
+  // Handle functions with tokenId parameter
+  if (['tokenURI', 'ownerOf', 'getApproved', 'getTokenCreator', '_originalTokenInfo', 
+       '_sbtFlag', 'tokenByIndex', 'royalties'].includes(functionName)) {
+    return query.tokenId ? [query.tokenId] : [];
   }
+  
+  // Handle functions with address parameter
+  if (['balanceOf', '_importers', '_totalDonations', 'getCreatorName', 
+       'getCreatorTokenCount', 'getCreatorTokens'].includes(functionName)) {
+    return query.address ? [query.address] : [];
+  }
+  
+  // Handle functions with bytes4 parameter
+  if (functionName === 'supportsInterface') {
+    return query.interfaceId ? [query.interfaceId] : [];
+  }
+  
+  // Handle functions with multiple parameters
+  if (functionName === 'isApprovedForAll') {
+    return (query.owner && query.operator) ? [query.owner, query.operator] : [];
+  }
+  
+  if (functionName === 'royaltyInfo') {
+    return (query.tokenId && query.salePrice) ? [query.tokenId, query.salePrice] : [];
+  }
+  
+  if (functionName === 'tokenOfOwnerByIndex') {
+    return (query.owner && query.index) ? [query.owner, query.index] : [];
+  }
+  
+  // Functions with no parameters (most contract-specific functions)
+  return [];
 };
 
 // Generate cache key

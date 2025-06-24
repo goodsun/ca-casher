@@ -5,16 +5,43 @@ import { SUPPORTED_FUNCTIONS } from './types';
 const RPC_ENDPOINT = process.env.RPC_ENDPOINT || '';
 const RPC_TIMEOUT = parseInt(process.env.RPC_TIMEOUT || '5000');
 
-// Common ERC721/ERC20 ABI fragments
+// Comprehensive view function ABI fragments from donaterble_nft_abi.json
 const ABI_FRAGMENTS = [
+  // Standard ERC721 functions
   'function name() view returns (string)',
   'function symbol() view returns (string)',
-  'function tokenURI(uint256 tokenId) view returns (string)',
-  'function owner() view returns (address)',
-  'function ownerOf(uint256 tokenId) view returns (address)',
   'function totalSupply() view returns (uint256)',
   'function balanceOf(address owner) view returns (uint256)',
+  'function ownerOf(uint256 tokenId) view returns (address)',
+  'function getApproved(uint256 tokenId) view returns (address)',
+  'function isApprovedForAll(address owner, address operator) view returns (bool)',
+  'function tokenURI(uint256 tokenId) view returns (string)',
+  'function tokenByIndex(uint256 index) view returns (uint256)',
+  'function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)',
+  'function supportsInterface(bytes4 interfaceId) view returns (bool)',
+  
+  // Contract-specific simple functions (no parameters)
+  'function INVERSE_BASIS_POINT() view returns (uint16)',
+  'function _lastId() view returns (uint256)',
+  'function _maxFeeRate() view returns (uint256)',
+  'function _mintFee() view returns (uint256)',
+  'function _owner() view returns (address)',
+  'function _totalBurned() view returns (uint256)',
   'function getCreatorCount() view returns (uint256)',
+  'function getCreators() view returns (address[])',
+  'function getTotalBurned() view returns (uint256)',
+  
+  // Contract-specific functions with parameters
+  'function _importers(address) view returns (bool)',
+  'function _originalTokenInfo(uint256) view returns (string)',
+  'function _sbtFlag(uint256) view returns (bool)',
+  'function _totalDonations(address) view returns (uint256)',
+  'function getCreatorName(address creator) view returns (string)',
+  'function getCreatorTokenCount(address creator) view returns (uint256)',
+  'function getCreatorTokens(address creator) view returns (uint256[])',
+  'function getTokenCreator(uint256 tokenId) view returns (address)',
+  'function royalties(uint256) view returns (address recipient, uint16 feeRate)',
+  'function royaltyInfo(uint256 tokenId, uint256 salePrice) view returns (address receiver, uint256 royaltyAmount)',
 ];
 
 export async function callContractFunction(
