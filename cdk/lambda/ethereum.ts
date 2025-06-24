@@ -14,6 +14,7 @@ const ABI_FRAGMENTS = [
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function totalSupply() view returns (uint256)',
   'function balanceOf(address owner) view returns (uint256)',
+  'function getCreatorCount() view returns (uint256)',
 ];
 
 export async function callContractFunction(

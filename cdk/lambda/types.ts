@@ -21,6 +21,7 @@ export const CACHE_TTL: Record<string, number> = {
   'ownerOf': 300,       // 5 minutes
   'totalSupply': 300,   // 5 minutes
   'balanceOf': 60,      // 1 minute
+  'getCreatorCount': 300, // 5 minutes
 };
 
 export const SUPPORTED_FUNCTIONS = Object.keys(CACHE_TTL);
