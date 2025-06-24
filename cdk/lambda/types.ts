@@ -49,6 +49,15 @@ export const CACHE_TTL: Record<string, number> = {
   'getTokenCreator': 86400,         // 24 hours - creator never changes after mint
   'royalties': 86400,               // 24 hours - royalty settings rarely change
   'royaltyInfo': 86400,             // 24 hours - royalty info rarely changes
+  
+  // TBA Account functions
+  'owner': 300,                     // 5 minutes - TBA owner can change with NFT transfers
+  'token': 86400,                   // 24 hours - TBA token binding never changes
+  'nonce': 60,                      // 1 minute - nonce changes with transactions
+  'isValidSignature': 300,          // 5 minutes - signature validation can change
+  
+  // TBA Registry functions
+  'account': 86400,                 // 24 hours - account address calculation is deterministic
 };
 
 export const SUPPORTED_FUNCTIONS = Object.keys(CACHE_TTL);

@@ -51,6 +51,18 @@ const parseParams = (functionName: string, query: any): any[] => {
     return query.interfaceId ? [query.interfaceId] : [];
   }
   
+  // Handle TBA isValidSignature function
+  if (functionName === 'isValidSignature') {
+    return (query.hash && query.signature) ? [query.hash, query.signature] : [];
+  }
+  
+  // Handle TBA Registry account function
+  if (functionName === 'account') {
+    return (query.implementation && query.chainId && query.tokenContract && query.tokenId && query.salt) 
+      ? [query.implementation, query.chainId, query.tokenContract, query.tokenId, query.salt] 
+      : [];
+  }
+  
   // Handle functions with multiple parameters
   if (functionName === 'isApprovedForAll') {
     return (query.owner && query.operator) ? [query.owner, query.operator] : [];
