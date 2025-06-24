@@ -144,6 +144,53 @@ app.get('/contract/:address/:function', validateContract, async (req: Request, r
   }
 });
 
+// POST handler for cache invalidation (same logic as GET but bypasses cache)
+app.post('/contract/:address/:function', validateContract, async (req: Request, res: Response) => {
+  const { address, function: functionName } = req.params;
+  
+  if (!CACHE_TTL[functionName]) {
+    return res.status(400).json({ error: 'Unsupported function' });
+  }
+
+  const params = parseParams(functionName, req.query);
+  const cacheKey = getCacheKey(address, functionName, params);
+
+  try {
+    // Call contract directly (bypass cache)
+    logger.info('POST request, bypassing cache', { address, functionName, params });
+    const result = await callContractFunction(address, functionName, params);
+
+    // Store in cache
+    const ttl = CACHE_TTL[functionName];
+    const now = Date.now();
+    const cacheItem: CacheItem = {
+      cacheKey,
+      value: result,
+      expireAt: Math.floor((now + (ttl * 1000)) / 1000),
+      createdAt: now,
+      contractAddress: address.toLowerCase(),
+      functionName,
+      parameters: params.length > 0 ? JSON.stringify(params) : undefined
+    };
+
+    await setCache(cacheItem);
+    logger.info('Cache updated via POST', { cacheKey });
+
+    return res.json({
+      result,
+      cached: false,
+      updated: true
+    });
+
+  } catch (error) {
+    logger.error('Error processing POST request', { error, address, functionName });
+    return res.status(500).json({ 
+      error: 'Failed to fetch data',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Health check
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
