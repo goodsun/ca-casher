@@ -10,7 +10,8 @@ CA Casher は、Ethereum のスマートコントラクト（特に NFT コン�
 
 - スマートコントラクトの view 関数結果のキャッシュ
 - イベント監視による自動キャッシュ無効化
-- API キーによるアクセス制御
+- 環境別の認証設定（APIキー認証 / パブリックアクセス）
+- 複数環境対応（local/production）
 - 完全サーバーレス構成でコスト最適化
 
 ## アーキテクチャ
@@ -52,31 +53,64 @@ cd ..
 
 ### 4. 環境変数の設定
 
-`.env.local.example` をコピーして `.env.local` を作成：
-
-```bash
-cp .env.local.example .env.local
-```
-
-`.env.local` を編集して必要な値を設定：
+開発環境用（`.env.local`）を設定：
 
 ```env
-# 監視対象のコントラクトアドレス（カンマ区切り）
-CONTRACT_ADDRESSES=0x1234...,0x5678...
+# Environment
+ENVIRONMENT=local
 
-# チェーン設定
+# Contract Addresses (comma separated)
+CONTRACT_ADDRESSES=0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D,0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB
+
+# Chain Configuration
 CHAIN_ID=1
-RPC_ENDPOINT=https://mainnet.infura.io/v3/YOUR_KEY
+RPC_ENDPOINT=https://ethereum-rpc.publicnode.com
 
-# DynamoDB テーブル名
-TABLE_NAME=ca-casher-cache
+# DynamoDB Configuration
+TABLE_NAME=ca-casher-cache-local
 
-# API 設定
+# API Configuration
 API_KEYS=your-api-key-1,your-api-key-2
-ALLOWED_ORIGINS=https://yourdomain.com
+ALLOWED_ORIGINS=https://yourdomain.com,https://anotherdomain.com
+REQUIRE_API_KEY=true
 
-# ログレベル
+# Lambda Configuration
 LOG_LEVEL=info
+
+# AWS Configuration
+AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY
+AWS_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
+AWS_DEFAULT_REGION=ap-northeast-1
+```
+
+本番環境用（`.env.production`）を設定：
+
+```env
+# Environment
+ENVIRONMENT=production
+
+# Contract Addresses (comma separated) - Production environment
+CONTRACT_ADDRESSES=0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7
+
+# Chain Configuration
+CHAIN_ID=137
+RPC_ENDPOINT=https://polygon-rpc.com
+
+# DynamoDB Configuration
+TABLE_NAME=ca-casher-cache-prod
+
+# API Configuration
+API_KEYS=prod-api-key-1,prod-api-key-2
+ALLOWED_ORIGINS=https://yourdomain.com
+REQUIRE_API_KEY=false
+
+# Lambda Configuration
+LOG_LEVEL=info
+
+# AWS Configuration
+AWS_ACCESS_KEY_ID=YOUR_ACCESS_KEY
+AWS_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
+AWS_DEFAULT_REGION=ap-northeast-1
 ```
 
 ### 5. CDK Bootstrap（初回のみ）
@@ -88,11 +122,14 @@ cdk bootstrap
 ### 6. デプロイ
 
 ```bash
-# 自動デプロイスクリプト
-./deploy.sh
+# 開発環境にデプロイ
+./deploy.sh local
 
-# または手動で
-npm run deploy
+# 本番環境にデプロイ
+./deploy.sh production
+
+# 環境指定なしの場合は local がデフォルト
+./deploy.sh
 ```
 
 ## 使用方法
@@ -105,25 +142,80 @@ npm run deploy
 GET https://your-api-id.execute-api.region.amazonaws.com/prod/contract/{address}/{function}
 ```
 
-### 例
+### 認証設定による使い分け
+
+#### パターン1: パブリックアクセス（本番環境推奨）
+`REQUIRE_API_KEY=false` の場合、APIキーなしでアクセス可能：
 
 ```bash
-# tokenURI の取得
-curl -H "x-api-key: YOUR_API_KEY" \
-  https://api.example.com/prod/contract/0x123.../tokenURI?tokenId=1
+# パブリックアクセス - APIキー不要
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/name"
 
-# totalSupply の取得
-curl -H "x-api-key: YOUR_API_KEY" \
-  https://api.example.com/prod/contract/0x123.../totalSupply
+# 結果: {"result":"BizenNFT","cached":true,"cachedAt":"2025-06-24T06:22:40.870Z"}
+```
+
+#### パターン2: APIキー認証（開発環境推奨）
+`REQUIRE_API_KEY=true` の場合、APIキーが必要：
+
+```bash
+# APIキーの値を取得
+aws apigateway get-api-key --api-key YOUR_API_KEY_ID --include-value
+
+# APIキー認証でアクセス
+curl -X GET "https://your-api-id.execute-api.region.amazonaws.com/prod/contract/0x123.../name" \
+  -H "x-api-key: YOUR_API_KEY_VALUE"
+```
+
+### 使用例
+
+```bash
+# コントラクト名の取得
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/name"
+
+# シンボルの取得
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/symbol"
+
+# 総供給量の取得
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/totalSupply"
+
+# カスタム関数の取得
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/getCreatorCount"
 ```
 
 ### キャッシュ対象の関数
 
+デフォルトでサポートされている関数とキャッシュ期間：
+
 - `name()`, `symbol()` - 24時間キャッシュ
 - `tokenURI(tokenId)` - 1時間キャッシュ
 - `owner()`, `ownerOf(tokenId)` - 5分キャッシュ
-- `totalSupply()` - 5分キャッシュ
+- `totalSupply()`, `getCreatorCount()` - 5分キャッシュ
 - `balanceOf(address)` - 1分キャッシュ
+
+### カスタム関数の追加
+
+新しい関数をサポートするには：
+
+1. **ABI定義の追加** (`lambda/ethereum.ts`):
+```typescript
+const ABI_FRAGMENTS = [
+  // ... 既存の関数
+  'function yourCustomFunction() view returns (uint256)',
+];
+```
+
+2. **キャッシュ設定の追加** (`lambda/types.ts`):
+```typescript
+export const CACHE_TTL: Record<string, number> = {
+  // ... 既存の設定
+  'yourCustomFunction': 300, // 5分キャッシュ
+};
+```
+
+3. **デプロイ**:
+```bash
+./deploy.sh production
+```
 
 ## 開発
 
@@ -167,17 +259,56 @@ CloudWatch ダッシュボードで以下をモニタリング：
 リソースを削除する場合：
 
 ```bash
-./cleanup.sh
+# 開発環境の削除
+./cleanup.sh local
+
+# 本番環境の削除（確認プロンプトあり）
+./cleanup.sh production
 ```
+
+**注意**: 本番環境削除時は `DELETE-PRODUCTION` と入力する必要があります。
+
+## 設定パターンとユースケース
+
+### パターン1: 開発・テスト環境
+```env
+REQUIRE_API_KEY=true
+ALLOWED_ORIGINS=http://localhost:3000,https://dev.example.com
+```
+**用途**: 開発チーム内での利用、API使用量の制御
+
+### パターン2: パブリックAPI
+```env
+REQUIRE_API_KEY=false
+ALLOWED_ORIGINS=*
+```
+**用途**: 一般公開API、フロントエンドアプリケーションでの利用
+
+### パターン3: 企業内API
+```env
+REQUIRE_API_KEY=true
+ALLOWED_ORIGINS=https://app.yourcompany.com,https://admin.yourcompany.com
+```
+**用途**: 社内システム、特定のドメインからのみアクセス許可
+
+### パターン4: パートナーAPI
+```env
+REQUIRE_API_KEY=true
+ALLOWED_ORIGINS=https://partner1.com,https://partner2.com
+```
+**用途**: ビジネスパートナーとのAPI連携
 
 ## トラブルシューティング
 
 ### API キーの取得
 
 ```bash
-# API キー ID を確認
+# スタック情報の確認
+aws cloudformation describe-stacks --stack-name CaCasherStack-local
+
+# API キー ID を確認（APIキー認証有効時のみ）
 aws cloudformation describe-stacks \
-  --stack-name CaCasherStack \
+  --stack-name CaCasherStack-local \
   --query "Stacks[0].Outputs[?OutputKey=='ApiKeyId'].OutputValue" \
   --output text
 
@@ -185,6 +316,20 @@ aws cloudformation describe-stacks \
 aws apigateway get-api-key \
   --api-key <API_KEY_ID> \
   --include-value
+```
+
+### 認証設定の確認
+
+```bash
+# 現在の環境設定を確認
+cat .env.production
+
+# パブリックアクセスのテスト
+curl -X GET "https://your-api-endpoint/prod/contract/0x.../name"
+
+# APIキー認証のテスト
+curl -X GET "https://your-api-endpoint/prod/contract/0x.../name" \
+  -H "x-api-key: YOUR_API_KEY"
 ```
 
 ### DynamoDB テーブルの確認

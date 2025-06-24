@@ -5,7 +5,7 @@ import { CaCasherStack } from '../lib/ca-casher-stack';
 describe('CaCasherStack', () => {
   test('Stack creates DynamoDB table', () => {
     const app = new cdk.App();
-    const stack = new CaCasherStack(app, 'TestStack');
+    const stack = new CaCasherStack(app, 'TestStack', { environment: 'test' });
     const template = Template.fromStack(stack);
 
     template.hasResourceProperties('AWS::DynamoDB::Table', {
@@ -19,17 +19,17 @@ describe('CaCasherStack', () => {
 
   test('Stack creates API Gateway', () => {
     const app = new cdk.App();
-    const stack = new CaCasherStack(app, 'TestStack');
+    const stack = new CaCasherStack(app, 'TestStack', { environment: 'test' });
     const template = Template.fromStack(stack);
 
     template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-      Name: 'ca-casher-api'
+      Name: 'ca-casher-api-test'
     });
   });
 
   test('Stack creates Lambda functions', () => {
     const app = new cdk.App();
-    const stack = new CaCasherStack(app, 'TestStack');
+    const stack = new CaCasherStack(app, 'TestStack', { environment: 'test' });
     const template = Template.fromStack(stack);
 
     template.hasResourceProperties('AWS::Lambda::Function', {

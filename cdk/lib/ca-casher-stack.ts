@@ -7,9 +7,15 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
+interface CaCasherStackProps extends cdk.StackProps {
+  environment: string;
+}
+
 export class CaCasherStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: CaCasherStackProps) {
     super(scope, id, props);
+    
+    const environment = props.environment;
 
     // DynamoDB table for caching
     const cacheTable = new dynamodb.Table(this, 'CaCasherCacheTable', {
@@ -26,7 +32,7 @@ export class CaCasherStack extends cdk.Stack {
 
     // Lambda function for API
     const apiLambda = new lambda.Function(this, 'CaCasherApiFunction', {
-      functionName: 'ca-casher-api',
+      functionName: `ca-casher-api-${environment}`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64, // Graviton2 for cost savings
       handler: 'handler.handler',
@@ -41,7 +47,7 @@ export class CaCasherStack extends cdk.Stack {
         LOG_LEVEL: process.env.LOG_LEVEL || 'info',
         NODE_OPTIONS: '--enable-source-maps'
       },
-      reservedConcurrentExecutions: 20 // Cost control
+      // reservedConcurrentExecutions: 20 // Cost control - removed due to account limits
     });
 
     // Grant DynamoDB permissions to Lambda
@@ -49,14 +55,12 @@ export class CaCasherStack extends cdk.Stack {
 
     // API Gateway
     const api = new apigateway.RestApi(this, 'CaCasherApi', {
-      restApiName: 'ca-casher-api',
+      restApiName: `ca-casher-api-${environment}`,
       description: 'Smart Contract Cache API',
       deployOptions: {
         stageName: 'prod',
         throttlingBurstLimit: 20,
         throttlingRateLimit: 10,
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
         metricsEnabled: true
       },
       defaultCorsPreflightOptions: {
@@ -66,27 +70,38 @@ export class CaCasherStack extends cdk.Stack {
       }
     });
 
-    // API Key for authentication
-    const apiKey = new apigateway.ApiKey(this, 'CaCasherApiKey', {
-      apiKeyName: 'ca-casher-default-key',
-      description: 'Default API key for CA Casher'
-    });
+    // Conditional API authentication based on environment variable
+    const requireApiKey = process.env.REQUIRE_API_KEY === 'true';
+    
+    let apiKey: apigateway.ApiKey | undefined;
+    let usagePlan: apigateway.UsagePlan | undefined;
+    
+    if (requireApiKey) {
+      // API Key for authentication
+      apiKey = new apigateway.ApiKey(this, 'CaCasherApiKey', {
+        apiKeyName: `ca-casher-${environment}-key`,
+        description: 'Default API key for CA Casher'
+      });
 
-    // Usage Plan
-    const usagePlan = new apigateway.UsagePlan(this, 'CaCasherUsagePlan', {
-      name: 'ca-casher-usage-plan',
-      api: api,
-      throttle: {
-        rateLimit: 10,
-        burstLimit: 20
-      },
-      quota: {
-        limit: 1000000,
-        period: apigateway.Period.MONTH
-      }
-    });
+      // Usage Plan
+      usagePlan = new apigateway.UsagePlan(this, 'CaCasherUsagePlan', {
+        name: `ca-casher-usage-plan-${environment}`,
+        throttle: {
+          rateLimit: 10,
+          burstLimit: 20
+        },
+        quota: {
+          limit: 1000000,
+          period: apigateway.Period.MONTH
+        }
+      });
 
-    usagePlan.addApiKey(apiKey);
+      usagePlan.addApiStage({
+        stage: api.deploymentStage
+      });
+
+      usagePlan.addApiKey(apiKey);
+    }
 
     // Lambda integration
     const integration = new apigateway.LambdaIntegration(apiLambda);
@@ -96,17 +111,17 @@ export class CaCasherStack extends cdk.Stack {
     const addressResource = contractResource.addResource('{address}');
     const functionResource = addressResource.addResource('{function}');
 
-    // Add methods with API key requirement
+    // Add methods with conditional API key requirement
     functionResource.addMethod('GET', integration, {
-      apiKeyRequired: true
+      apiKeyRequired: requireApiKey
     });
     functionResource.addMethod('POST', integration, {
-      apiKeyRequired: true
+      apiKeyRequired: requireApiKey
     });
 
     // Lambda function for event monitoring
     const eventMonitorLambda = new lambda.Function(this, 'CaCasherEventMonitor', {
-      functionName: 'ca-casher-event-monitor',
+      functionName: `ca-casher-event-monitor-${environment}`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       handler: 'event-monitor.handler',
@@ -127,7 +142,7 @@ export class CaCasherStack extends cdk.Stack {
 
     // EventBridge rule for periodic monitoring (every 5 minutes)
     const eventRule = new events.Rule(this, 'CaCasherEventRule', {
-      ruleName: 'ca-casher-event-monitor-rule',
+      ruleName: `ca-casher-event-monitor-rule-${environment}`,
       schedule: events.Schedule.rate(cdk.Duration.minutes(5))
     });
 
@@ -139,10 +154,12 @@ export class CaCasherStack extends cdk.Stack {
       description: 'API Gateway endpoint URL'
     });
 
-    new cdk.CfnOutput(this, 'ApiKeyId', {
-      value: apiKey.keyId,
-      description: 'API Key ID'
-    });
+    if (requireApiKey && apiKey) {
+      new cdk.CfnOutput(this, 'ApiKeyId', {
+        value: apiKey.keyId,
+        description: 'API Key ID'
+      });
+    }
 
     new cdk.CfnOutput(this, 'TableName', {
       value: cacheTable.tableName,
