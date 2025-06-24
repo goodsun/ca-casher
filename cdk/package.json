@@ -1,0 +1,31 @@
+{
+  "name": "ca-casher-cdk",
+  "version": "0.1.0",
+  "bin": {
+    "ca-casher": "bin/ca-casher.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk",
+    "deploy": "source .env.local && npm run build && cdk deploy",
+    "destroy": "cdk destroy --force",
+    "cleanup": "sh cleanup.sh",
+    "redeploy": "npm run destroy && npm run deploy"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "22.5.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "aws-cdk": "2.165.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.6.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.165.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
