@@ -45,6 +45,7 @@ export class CaCasherStack extends cdk.Stack {
         CHAIN_ID: process.env.CHAIN_ID || '1',
         RPC_ENDPOINT: process.env.RPC_ENDPOINT || '',
         LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+        ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || '*',
         NODE_OPTIONS: '--enable-source-maps'
       },
       // reservedConcurrentExecutions: 20 // Cost control - removed due to account limits
