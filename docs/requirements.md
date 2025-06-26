@@ -113,9 +113,58 @@ AWS上にスマートコントラクトのview関数の結果をキャッシュ�
 - ログに機密情報を出力しない
 
 ## エラーハンドリング
+### 基本戦略
 - RPCエラー時: キャッシュから返却（Stale-While-Revalidate）
 - DynamoDB障害時: 直接RPCへフォールバック
 - レート制限時: 429エラーとRetry-Afterヘッダー
+
+### 実装済み高度なエラーハンドリング
+
+#### 1. Stale Cache Fallback
+RPC 呼び出しが失敗した場合、期限切れのキャッシュデータを返却します：
+```json
+{
+  "result": "cached_value",
+  "cached": true,
+  "stale": true,
+  "cachedAt": "2025-06-24T06:22:40.870Z"
+}
+```
+
+#### 2. コントラクトホワイトリスト
+未承認のコントラクトアドレスに対してはエラーを返します：
+```json
+{
+  "error": "Contract not whitelisted",
+  "message": "The contract 0x... is not in the whitelist"
+}
+```
+
+#### 3. 認証エラー（開発環境）
+APIキーが必要な環境でキーが不足している場合：
+```json
+{
+  "error": "Missing Authentication Token",
+  "message": "API key is required for this environment"
+}
+```
+
+#### 4. 未対応関数エラー
+サポートされていない関数を呼び出した場合：
+```json
+{
+  "error": "Unsupported function",
+  "message": "Function 'functionName' is not supported"
+}
+```
+
+#### 5. TBA関数の特殊パラメータ処理
+TBA関数は特殊なパラメータ形式を持つため、専用のパラメータ解析を実装：
+- `account` 関数: 5つのパラメータ（implementation, chainId, tokenContract, tokenId, salt）
+- `isValidSignature` 関数: 2つのパラメータ（hash, signature）
+
+#### 6. RPC タイムアウト設定
+環境変数 `RPC_TIMEOUT` でタイムアウト時間を制御（デフォルト: 5秒）
 
 ## 環境変数設計
 ### .env ファイル構成
@@ -135,9 +184,46 @@ TTL_ATTRIBUTE=expireAt
 # API設定
 API_KEYS=key1,key2
 ALLOWED_ORIGINS=https://example.com
+REQUIRE_API_KEY=true
 
 # Lambda設定
 LOG_LEVEL=info
+NODE_OPTIONS=--enable-source-maps
+
+# 環境設定
+ENVIRONMENT=production
+```
+
+### 実装済み環境変数リスト
+
+#### プロダクション環境 (.env.production)
+```env
+CHAIN_ID=137
+CONTRACT_ADDRESSES=0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7,0x63c8A3536E4A647D48fC0076D442e3243f7e773b,0xa8a05744C04c7AD0D31Fcee368aC18040832F1c1
+RPC_ENDPOINT=https://polygon-mainnet.g.alchemy.com/v2/[API_KEY]
+RPC_TIMEOUT=5000
+TABLE_NAME=ca-cache-prod
+TTL_ATTRIBUTE=expireAt
+REQUIRE_API_KEY=false
+ALLOWED_ORIGINS=*
+LOG_LEVEL=info
+NODE_OPTIONS=--enable-source-maps
+ENVIRONMENT=production
+```
+
+#### 開発環境 (.env.local)
+```env
+CHAIN_ID=1
+CONTRACT_ADDRESSES=0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D,0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB
+RPC_ENDPOINT=https://eth-mainnet.g.alchemy.com/v2/[API_KEY]
+RPC_TIMEOUT=5000
+TABLE_NAME=ca-cache-local
+TTL_ATTRIBUTE=expireAt
+REQUIRE_API_KEY=true
+ALLOWED_ORIGINS=http://localhost:3000,https://localhost:3000
+LOG_LEVEL=debug
+NODE_OPTIONS=--enable-source-maps
+ENVIRONMENT=local
 ```
 
 ## 運用要件

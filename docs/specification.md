@@ -2,14 +2,23 @@
 
 ## 概要
 
-CA Casher は、スマートコントラクトのview関数の結果をキャッシュし、高速なレスポンスを提供するサーバーレスAPIです。ERC-721 NFTコントラクトを中心に、25個のview関数をサポートしています。
+CA Casher は、スマートコントラクトのview関数の結果をキャッシュし、高速なレスポンスを提供するサーバーレスAPIです。ERC-721 NFTコントラクトを中心に、**33個**のview関数をサポートしています。
 
 ## API エンドポイント
 
 ### ベースURL
+
+**注意**: URL は CDK デプロイ時に動的に生成されます。以下は参考例です：
+
 ```
+# プロダクション環境（例）
 https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/
+
+# 開発環境（例）
+https://[API_ID].execute-api.ap-northeast-1.amazonaws.com/local/
 ```
+
+実際のURLは `cdk deploy` 後のスタック出力で確認してください。
 
 ### エンドポイント形式
 ```
@@ -23,7 +32,7 @@ POST /contract/{contractAddress}/{functionName}[?parameters]
 
 ## サポート関数
 
-### パラメータなしの関数（12個）
+### パラメータなしの関数（17個）
 
 #### コントラクト基本情報
 | 関数名 | 戻り値型 | キャッシュ期間 | 説明 |
@@ -64,6 +73,15 @@ curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/co
 | `getCreators` | address[] | 5分 | 全クリエーターのアドレス一覧 |
 | `getTotalBurned` | uint256 | 5分 | 焼却済み総数（別関数） |
 
+#### TBA（Token Bound Account）関連
+| 関数名 | 戻り値型 | キャッシュ期間 | 説明 |
+|--------|----------|----------------|------|
+| `owner` | address | 5分 | TBAのオーナーアドレス |
+| `token` | (uint256,address,uint256) | 24時間 | TBAに紐づくトークン情報 |
+| `nonce` | uint256 | 1分 | TBAのトランザクション実行ノンス |
+| `isValidSignature` | bytes4 | 5分 | TBAの署名検証 |
+| `account` | address | 24時間 | TBA Registryアカウント計算 |
+
 **使用例:**
 ```bash
 curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/getCreatorCount"
@@ -73,7 +91,7 @@ curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/co
 # レスポンス: {"result":["0x5A636bdaB39414DE26735f8CDf6dded8b5bcA0e2","0x41dcCE71B7b89136CaFD8033bEc9ae005BEf9c7E",...]}
 ```
 
-### パラメータありの関数（13個）
+### パラメータありの関数（16個）
 
 #### トークンID系関数（8個）
 
@@ -142,6 +160,28 @@ curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/co
 curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7/supportsInterface?interfaceId=0x80ac58cd"
 ```
 
+### TBA（Token Bound Account）専用関数
+
+TBA関数は特殊なパラメータ形式を使用します：
+
+**使用例:**
+```bash
+# TBAオーナー取得
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0x[TBA_ADDRESS]/owner"
+
+# TBAトークン情報取得  
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0x[TBA_ADDRESS]/token"
+
+# TBAノンス取得
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0x[TBA_ADDRESS]/nonce"
+
+# TBA署名検証
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0x[TBA_ADDRESS]/isValidSignature?hash=0x...&signature=0x..."
+
+# TBA Registryアカウント計算
+curl -X GET "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/contract/0x[REGISTRY_ADDRESS]/account?implementation=0x...&chainId=137&tokenContract=0x...&tokenId=1&salt=0"
+```
+
 ## レスポンス形式
 
 ### 成功レスポンス
@@ -184,8 +224,16 @@ curl -X POST "https://ea7lit5re3.execute-api.ap-northeast-1.amazonaws.com/prod/c
 ## 制限事項
 
 ### 対応コントラクト
-現在はホワイトリスト方式で以下のコントラクトのみ対応：
-- **Polygon**: `0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7` (BizenNFT)
+現在はホワイトリスト方式で以下のコントラクトに対応：
+
+#### プロダクション環境（Polygon）
+- `0xDaB98a9D823b8152A33AAA9292fEf0aE7C2fE4b7` (BizenNFT) 
+- `0x63c8A3536E4A647D48fC0076D442e3243f7e773b` (追加契約)
+- `0xa8a05744C04c7AD0D31Fcee368aC18040832F1c1` (追加契約)
+
+#### 開発環境（Ethereum）
+- `0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D` (Bored Ape Yacht Club)
+- `0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB` (CryptoPunks)
 
 ### パフォーマンス制限
 - RPC タイムアウト: 5秒
