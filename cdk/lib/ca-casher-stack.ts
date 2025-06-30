@@ -108,6 +108,11 @@ export class CaCasherStack extends cdk.Stack {
     const integration = new apigateway.LambdaIntegration(apiLambda);
 
     // API routes
+    // Health check endpoint at root
+    api.root.addMethod('GET', integration, {
+      apiKeyRequired: false // Health check doesn't require API key
+    });
+    
     const contractResource = api.root.addResource('contract');
     const addressResource = contractResource.addResource('{address}');
     const functionResource = addressResource.addResource('{function}');

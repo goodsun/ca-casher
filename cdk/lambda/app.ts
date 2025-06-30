@@ -1,5 +1,5 @@
 import express from 'express';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { ethers } from 'ethers';
 import { getCache, setCache } from './dynamodb';
 import { callContractFunction } from './ethereum';
@@ -8,8 +8,14 @@ import { logger } from './logger';
 
 const app = express();
 
+// Disable Express's default x-powered-by header
+app.disable('x-powered-by');
+
+// Trust proxy for serverless environment
+app.set('trust proxy', true);
+
 // CORS middleware
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction): void => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
   const origin = req.headers.origin;
   
@@ -22,19 +28,30 @@ app.use((req, res, next) => {
   res.header('Access-Control-Max-Age', '86400');
   
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
   
   next();
 });
 
-app.use(express.json());
+// JSON parser with error handling
+app.use(express.json({ 
+  limit: '1mb',
+  strict: true
+}));
+
+// URL-encoded parser
+app.use(express.urlencoded({ 
+  extended: true,
+  limit: '1mb'
+}));
 
 const CHAIN_ID = process.env.CHAIN_ID || '1';
 const CONTRACT_ADDRESSES = (process.env.CONTRACT_ADDRESSES || '').split(',').map(addr => addr.trim().toLowerCase());
 
 // Middleware to validate contract address
-const validateContract = (req: Request, res: Response, next: Function) => {
+const validateContract = (req: Request, res: Response, next: NextFunction): void => {
   const { address } = req.params;
   
   if (!address || !ethers.isAddress(address)) {
@@ -224,9 +241,40 @@ app.post('/contract/:address/:function', validateContract, async (req: Request, 
   }
 });
 
+// Root endpoint (health check)
+app.get('/', (req: Request, res: Response) => {
+  res.json({ 
+    status: 'healthy', 
+    service: 'ca-casher-api',
+    timestamp: new Date().toISOString() 
+  });
+});
+
 // Health check
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Global error handler
+app.use((error: any, req: Request, res: Response, next: NextFunction): void => {
+  logger.error('Unhandled error', { error, url: req.url, method: req.method });
+  
+  if (res.headersSent) {
+    return;
+  }
+  
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use((req: Request, res: Response): void => {
+  res.status(404).json({
+    error: 'Not found',
+    message: `Path ${req.path} not found`
+  });
 });
 
 export default app;
